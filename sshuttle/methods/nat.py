@@ -52,12 +52,23 @@ class Method(BaseMethod):
 
         # Redirect DNS traffic as requested. This includes routing traffic
         # to localhost DNS servers through sshuttle.
+	# dnsdict = {"127.0.0.1": "8.8.8.8", "::1": "2001:4860:4860::8888"} # % dnsdict.get(ip, ip)
         for _, ip in [i for i in nslist if i[0] == family]:
             _ipt('-A', chain, '-j', 'REDIRECT',
-                 '--dest', '%s' % ip,
+                 '--dest', '%s' % ("8.8.8.8" if ip == "127.0.0.1" else "2001:4860:4860::8888" if ip == "::1" else ip),
                  '-p', 'udp',
                  '--dport', '53',
                  '--to-ports', str(dnsport))
+
+        # _ipt('-A', chain, '-j', 'REDIRECT', '-p tcp -m set --match-set gfwlist dst', '--to-ports', str(port)) # ERROR
+        if family is socket.AF_INET:
+            tcp_ports = tuple('-p tcp -m set --match-set gfwlist dst'.split())
+        else:
+            tcp_ports = tuple('-p tcp -m set --match-set gfwlist6 dst'.split())
+        _ipt('-A', chain, '-j', 'REDIRECT', *(tcp_ports + ('--to-ports', str(port))))
+        # ipt(socket.AF_INET , table, '-A', chain, '-j', 'REDIRECT', *(tcp_ports + ('--to-ports', str(port))))
+        # tcp_ports = tuple('-p tcp -m set --match-set gfwlist6 dst'.split())
+        # ipt(socket.AF_INET6, table, '-A', chain, '-j', 'REDIRECT', *(tcp_ports + ('--to-ports', str(port))))
 
         # create new subnet entries.
         for _, swidth, sexclude, snet, fport, lport \

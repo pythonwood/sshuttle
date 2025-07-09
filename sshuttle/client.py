@@ -167,8 +167,11 @@ class MultiListener:
     def bind(self, address_v6, address_v4):
         assert not self.bind_called
         self.bind_called = True
+        # print(address_v4, address_v6)
         if address_v6 is not None:
             self.v6 = socket.socket(socket.AF_INET6, self.type, self.proto)
+            # Set IPV6_V6ONLY to 1 to disable IPv4-mapped IPv6 addresses # python3 -m http.server --bind :: # double stack
+            self.v6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
             try:
                 self.v6.bind(address_v6)
             except OSError as e:
@@ -187,9 +190,14 @@ class MultiListener:
                 raise e
         else:
             self.v6 = None
-        if address_v4 is not None:
+        # print(socket.AF_INET, self.type, self.proto, address_v4)
+        if address_v4 is not None: #  and not(address_v6 and address_v6[0] == ")
             self.v4 = socket.socket(socket.AF_INET, self.type, self.proto)
-            self.v4.bind(address_v4)
+            try:
+                self.v4.bind(address_v4)
+            except OSError as e:
+                debug1("Could not bind to an IPv4 socket with " "address %s and port %s. " % (str(address_v4[0]), str(address_v4[1])))
+                raise e
         else:
             self.v4 = None
 

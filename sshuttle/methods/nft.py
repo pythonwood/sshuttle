@@ -26,17 +26,19 @@ class Method(BaseMethod):
             return nft(family, table, action, *args)
 
         chain = table
-        table = 'fw4fuck'
+        table = 'fw4'
 
         # basic cleanup/setup of chains
         _nft('add table', '')
-        if table != "fw4":
-            _nft('add chain', 'prerouting', '{ type nat hook prerouting priority -100; policy accept; }')
-            _nft('add chain', 'output', '{ type nat hook output priority -100; policy accept; }')
+
+        # -100 is dstnat ? # https://www.ryzl.com.cn/bbs/forum.php?mod=redirect&goto=findpost&ptid=1019&pid=2045
+        # Error: Could not process rule: Not supported # 哦,懂了,默认的这条链 priority是filter  想要这样做必须是dstnat才行
+        _nft('add chain', 'nat_prerouting', '{ type nat hook prerouting priority -100; policy accept; }') # fw4 prerouting priority is filter.
+        _nft('add chain', 'nat_output', '{ type nat hook output priority -100; policy accept; }')         # fw4 output     priority is filter.
         _nft('add chain', chain)
         _nft('flush chain', chain)
-        _nft('add rule', 'output jump %s' % chain)
-        _nft('add rule', 'prerouting jump %s' % chain)
+        _nft('add rule', 'nat_output jump %s' % chain)
+        _nft('add rule', 'nat_prerouting jump %s' % chain)
 
         # setup_firewall() gets called separately for ipv4 and ipv6. Make sure
         # we only handle the version that we expect to.
@@ -106,15 +108,15 @@ class Method(BaseMethod):
             return nft(family, table, action, *args)
 
         chain = table
-        table = 'fw4fuck'
+        table = 'fw4'
 
         # basic cleanup/setup of chains
         # nonfatal(_nft, 'delete table', '')
-        nonfatal(_nft, 'delete rule', 'prerouting', 'jump', chain)
-        nonfatal(_nft, 'delete rule', 'output', 'jump', chain)
+        nonfatal(_nft, 'delete rule', 'nat_prerouting', 'jump', chain)
+        nonfatal(_nft, 'delete rule', 'nat_output', 'jump', chain)
         nonfatal(_nft, 'delete chain', chain)
         if table != "fw4":
-            _nft('delete set', 'gfwlist' if family == socket.AF_INET else 'gfwlist6')
+            _nft('flush set', 'gfwlist' if family == socket.AF_INET else 'gfwlist6') # need not delete
 
     def get_supported_features(self):
         result = super(Method, self).get_supported_features()

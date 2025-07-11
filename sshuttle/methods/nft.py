@@ -26,13 +26,13 @@ class Method(BaseMethod):
             return nft(family, table, action, *args)
 
         chain = table
+        table = 'fw4fuck'
 
         # basic cleanup/setup of chains
         _nft('add table', '')
-        _nft('add chain', 'prerouting',
-             '{ type nat hook prerouting priority -100; policy accept; }')
-        _nft('add chain', 'output',
-             '{ type nat hook output priority -100; policy accept; }')
+        if table != "fw4":
+            _nft('add chain', 'prerouting', '{ type nat hook prerouting priority -100; policy accept; }')
+            _nft('add chain', 'output', '{ type nat hook output priority -100; policy accept; }')
         _nft('add chain', chain)
         _nft('flush chain', chain)
         _nft('add rule', 'output jump %s' % chain)
@@ -42,8 +42,14 @@ class Method(BaseMethod):
         # we only handle the version that we expect to.
         if family == socket.AF_INET:
             _nft('add rule', chain, 'meta', 'nfproto', '!=', 'ipv4', 'return')
+            if table != "fw4":
+                _nft('add set', 'gfwlist  { type ipv4_addr \; flags interval \; auto-merge \; elements={8.8.8.8             , 43.138.184.126/28                      } \; }'.replace('\\',''))
+            _nft('add rule', chain, *('meta nfproto ipv4 meta l4proto tcp ip  daddr @gfwlist  redirect to :12300'.split()))
         else:
             _nft('add rule', chain, 'meta', 'nfproto', '!=', 'ipv6', 'return')
+            if table != "fw4":
+                _nft('add set', 'gfwlist6 { type ipv6_addr \; flags interval \; auto-merge \; elements={2001:4860:4860::8888, 2402:4e00:c011:300:6062:df90:cee4:0/120} \; }'.replace('\\',''))
+            _nft('add rule', chain, *('meta nfproto ipv6 meta l4proto tcp ip6 daddr @gfwlist6 redirect to :12300'.split()))
 
         # Strings to use below to simplify our code
         if family == socket.AF_INET:
@@ -99,8 +105,16 @@ class Method(BaseMethod):
         def _nft(action, *args):
             return nft(family, table, action, *args)
 
+        chain = table
+        table = 'fw4fuck'
+
         # basic cleanup/setup of chains
-        nonfatal(_nft, 'delete table', '')
+        # nonfatal(_nft, 'delete table', '')
+        nonfatal(_nft, 'delete rule', 'prerouting', 'jump', chain)
+        nonfatal(_nft, 'delete rule', 'output', 'jump', chain)
+        nonfatal(_nft, 'delete chain', chain)
+        if table != "fw4":
+            _nft('delete set', 'gfwlist' if family == socket.AF_INET else 'gfwlist6')
 
     def get_supported_features(self):
         result = super(Method, self).get_supported_features()

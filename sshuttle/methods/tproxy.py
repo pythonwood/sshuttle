@@ -91,6 +91,8 @@ class Method(BaseMethod):
             sender.setsockopt(socket.SOL_IP, IP_TRANSPARENT, 1)
         except PermissionError as e:
             self.setsockopt_error(e)
+        # # Set IPV6_V6ONLY to 1 to disable IPv4-mapped IPv6 addresses # python3 -m http.server --bind :: # double stack
+        # if sender.family is socket.AF_INET6: sender.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
         sender.bind(srcip)
         sender.sendto(data, dstip)
         sender.close()
@@ -146,6 +148,7 @@ class Method(BaseMethod):
         _ipt('-I', 'PREROUTING', '1', '-j', tproxy_chain)
 
         for _, ip in [i for i in nslist if i[0] == family]:
+            continue # 2025-07-13 tproxy exit when  dig -p12299 @127.0.0.1 x.com
             _ipt('-A', mark_chain, '-j', 'MARK', '--set-mark', tmark,
                  '--dest', '%s/32' % ip,
                  '-m', 'udp', '-p', 'udp', '--dport', '53')
@@ -179,6 +182,19 @@ class Method(BaseMethod):
             _ipt('-A', tproxy_chain, '-m', 'socket', '-j', divert_chain,
                  '-m', 'udp', '-p', 'udp')
 
+        if family is socket.AF_INET:
+            tcp_ports = tuple('-p tcp -m set --match-set gfwlist dst'.split())
+            udp_ports = tuple('-p udp -m set --match-set gfwlist dst'.split())
+        else:
+            tcp_ports = tuple('-p tcp -m set --match-set gfwlist6 dst'.split())
+            udp_ports = tuple('-p udp -m set --match-set gfwlist6 dst'.split())
+        _ipt('-A', mark_chain, '-j', 'MARK', '--set-mark', tmark, *tcp_ports)
+        _ipt('-A', tproxy_chain, '-j', 'TPROXY', '--tproxy-mark', tmark, *(tcp_ports + ('--on-port', str(port))))
+        if udp:
+            _ipt('-A', mark_chain, '-j', 'MARK', '--set-mark', tmark, *udp_ports)
+            _ipt('-A', tproxy_chain, '-j', 'TPROXY', '--tproxy-mark', tmark, *(udp_ports + ('--on-port', str(port))))
+
+
         for _, swidth, sexclude, snet, fport, lport \
                 in sorted(subnets, key=subnet_weight, reverse=True):
             tcp_ports = ('-p', 'tcp')
@@ -194,7 +210,8 @@ class Method(BaseMethod):
                      '-m', 'tcp',
                      *tcp_ports)
             else:
-                _ipt('-A', mark_chain, '-j', 'MARK', '--set-mark', tmark,
+                _ipt('-A', mark_chain, '-j', 'MARK',
+                     '--set-mark', tmark,
                      '--dest', '%s/%s' % (snet, swidth),
                      '-m', 'tcp',
                      *tcp_ports)

@@ -8,7 +8,7 @@ import sshuttle.client as client
 import sshuttle.firewall as firewall
 import sshuttle.hostwatch as hostwatch
 import sshuttle.ssyslog as ssyslog
-from sshuttle.options import parser, parse_ipport
+from sshuttle.options import parser, parse_ipport, parse_subnetport
 from sshuttle.helpers import family_ip_tuple, log, Fatal
 from sshuttle.sudoers import sudoers
 from sshuttle.namespace import enter_namespace
@@ -73,6 +73,9 @@ def main():
             if remotename == '' or remotename == '-':
                 remotename = None
             nslist = [family_ip_tuple(ns) for ns in opt.ns_hosts]
+            print(nslist, includes, opt.ns_hosts, opt.subnets, parse_subnetport('8.8.8.8')) # 2025-07-13 auto add nshost to tunnel
+            if opt.method == "tproxy":
+                includes += [parse_subnetport(line)[0] for line in opt.ns_hosts]
             if opt.seed_hosts:
                 sh = re.split(r'[\s,]+', (opt.seed_hosts or "").strip())
             elif opt.auto_hosts:
